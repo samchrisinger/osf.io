@@ -14,12 +14,12 @@
 
         <div class="project-organizer" id="projectOrganizerScope">
             <%include file="projectGridTemplates.html"/>
-            <div class="project-details"> 
-            </div>    
+            <div class="project-details">
+            </div>
 
 
             <div id="project-grid"></div>
-            <div id="organizer-legends"> 
+            <div id="organizer-legends">
                 <span class='organizer-legend'><img alt="Folder" src="/static/img/hgrid/folder.png">Folder</span>
                 <span class='organizer-legend'><img alt="Smart Folder" src="/static/img/hgrid/smart-folder.png">Smart Folder</span>
                 <span class='organizer-legend'><img alt="Project" src="/static/img/hgrid/project.png">Project</span>
@@ -108,6 +108,11 @@
         </div><!-- end col -->
     </div><!-- end row -->
 %endif
+</%def>
+
+<%def name="stylesheets()">
+${parent.stylesheets()}
+<link rel="stylesheet" href="/static/public/js/dashboard-page.css">
 </%def>
 
 <%def name="javascript_bottom()">

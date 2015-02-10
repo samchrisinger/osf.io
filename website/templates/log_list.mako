@@ -16,7 +16,7 @@
     <div class="logs addon-widget-container">
 
         <div class="components">
-            <div class="addon-widget-header clearfix"> 
+            <div class="addon-widget-header clearfix">
                 <h4>Recent Activity </h4>
                 <div class="pull-right">
                 </div>
@@ -63,7 +63,7 @@
                 </dl><!-- end foreach logs -->
                   <a href="#{}"  data-bind="click: moreLogs, visible: enableMoreLogs">  Load more... </a>
 
-            </div> 
+            </div>
         </div>
 </div>
 

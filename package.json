@@ -9,6 +9,7 @@
     "css-loader": "^0.9.1",
     "exports-loader": "^0.6.2",
     "express": "~4.10.0",
+    "extract-text-webpack-plugin": "^0.3.8",
     "file-loader": "^0.8.1",
     "imports-loader": "^0.6.3",
     "livedb": "~0.4.8",

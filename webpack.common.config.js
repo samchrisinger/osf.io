@@ -3,6 +3,7 @@ var path = require('path');
 var fs = require('fs');
 
 var SaveAssetsJson = require('assets-webpack-plugin');
+var ExtractTextPlugin = require('extract-text-webpack-plugin');
 
 var addons = require('./addons.json');
 var root = path.join(__dirname, 'website', 'static');
@@ -134,6 +135,7 @@ var plugins = [
     new webpack.DefinePlugin({
         'define.amd': false
     }),
+    new ExtractTextPlugin('[name].css'),
     new SaveAssetsJson()
 ];
 
@@ -153,7 +155,7 @@ module.exports = {
     output: output,
     module: {
         loaders: [
-            {test: /\.css$/, loaders: ['style', 'css']},
+            {test: /\.css$/, loader: ExtractTextPlugin.extract('style-loader', 'css-loader')},
             // url-loader uses DataUrls; files-loader emits files
             {test: /\.png$/, loader: 'url-loader?limit=100000&minetype=image/png'},
             {test: /\.gif$/, loader: 'url-loader?limit=10000&mimetype=image/gif'},

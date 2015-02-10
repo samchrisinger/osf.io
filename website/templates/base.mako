@@ -42,6 +42,8 @@
     <meta name="og:description" content="${self.og_description()}"/>
 
     ${includes_top()}
+    <link rel="stylesheet" href="/static/public/js/vendor.css">
+    <link rel="stylesheet" href="/static/public/js/base-page.css">
     ${self.stylesheets()}
     ${self.javascript()}
 
