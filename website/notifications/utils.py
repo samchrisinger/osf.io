@@ -44,7 +44,7 @@ def remove_contributor_from_subscriptions(contributor, node):
     """ Remove contributor from node subscriptions unless the user is an
         admin on any of node's parent projects.
     """
-    if not contributor._id in node.admin_contributor_ids:
+    if contributor._id not in node.admin_contributor_ids:
         node_subscriptions = get_all_node_subscriptions(contributor, node)
         for subscription in node_subscriptions:
             subscription.remove_user_from_subscription(contributor)
