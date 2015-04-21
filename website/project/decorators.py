@@ -40,6 +40,8 @@ def _kwargs_to_nodes(kwargs):
     elif pid and nid:
         node = _load_node_or_fail(nid)
         parent = _load_node_or_fail(pid)
+    elif not pid and not nid:
+        raise HTTPError(http.BAD_REQUEST)
 
     return parent, node
 
@@ -143,8 +145,8 @@ def _must_be_contributor_factory(include_public):
 must_be_contributor = _must_be_contributor_factory(False)
 must_be_contributor_or_public = _must_be_contributor_factory(True)
 
-
 def must_have_addon(addon_name, model):
+
     """Decorator factory that ensures that a given addon has been added to
     the target node. The decorated function will throw a 404 if the required
     addon is not found. Must be applied after a decorator that adds `node` and
