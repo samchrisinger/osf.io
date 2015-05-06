@@ -1491,6 +1491,8 @@ class Node(GuidStoredObject, AddonModelMixin, IdentifierMixin):
 
         # Recursively fork child nodes
         for node_contained in original.nodes:
+            if node_contained.is_deleted:
+                continue
             forked_node = None
             try:  # Catch the potential PermissionsError above
                 forked_node = node_contained.fork_node(auth=auth, title='')
@@ -1596,6 +1598,8 @@ class Node(GuidStoredObject, AddonModelMixin, IdentifierMixin):
         registered.nodes = []
 
         for node_contained in original.nodes:
+            if node_contained.is_deleted:
+                continue
             registered_node = node_contained.register_node(
                 schema, auth, template, data
             )
