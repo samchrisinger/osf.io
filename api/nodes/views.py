@@ -11,7 +11,7 @@ from api.base import generic_bulk_views as bulk_views
 from api.base import permissions as base_permissions
 from api.base.filters import ODMFilterMixin, ListFilterMixin
 from api.base.views import JSONAPIBaseView
-from api.base.utils import get_object_or_error, is_bulk_request, get_user_auth
+from api.base.utils import get_object_or_error, is_bulk_request, get_user_auth, is_truthy
 from api.files.serializers import FileSerializer
 from api.comments.serializers import CommentSerializer, CommentCreateSerializer
 from api.comments.permissions import CanCommentOrPublic
@@ -207,6 +207,8 @@ class NodeList(JSONAPIBaseView, bulk_views.BulkUpdateJSONAPIView, bulk_views.Bul
 
     + `filter[<fieldname>]=<Str>` -- fields and values to filter the search results on.
 
+    + `view_only=<Str>` -- Allow users with limited access keys to access this node. Note that some keys are anonymous, so using the view_only key will cause user-related information to no longer serialize. This includes blank ids for users and contributors and missing serializer fields and relationships.
+
     Nodes may be filtered by their `title`, `category`, `description`, `public`, `registration`, or `tags`.  `title`,
     `description`, and `category` are string fields and will be filtered using simple substring matching.  `public` and
     `registration` are booleans, and can be filtered using truthy values, such as `true`, `false`, `0`, or `1`.  Note
@@ -253,6 +255,18 @@ class NodeList(JSONAPIBaseView, bulk_views.BulkUpdateJSONAPIView, bulk_views.Bul
             auth = get_user_auth(self.request)
 
             nodes = Node.find(query)
+
+            # If skip_uneditable=True in query_params, skip nodes for which the user
+            # does not have EDIT permissions.
+            if is_truthy(self.request.query_params.get('skip_uneditable', False)):
+                has_permission = []
+                for node in nodes:
+                    if node.can_edit(auth):
+                        has_permission.append(node)
+
+                query = Q('_id', 'in', [node._id for node in has_permission])
+                return Node.find(query)
+
             for node in nodes:
                 if not node.can_edit(auth):
                     raise PermissionDenied
@@ -284,10 +298,28 @@ class NodeList(JSONAPIBaseView, bulk_views.BulkUpdateJSONAPIView, bulk_views.Bul
     # overrides BulkDestroyJSONAPIView
     def allow_bulk_destroy_resources(self, user, resource_list):
         """User must have admin permissions to delete nodes."""
-        for node in resource_list:
-            if not node.has_permission(user, ADMIN):
-                return False
-        return True
+        if is_truthy(self.request.query_params.get('skip_uneditable', False)):
+            return any([node.has_permission(user, ADMIN) for node in resource_list])
+        return all([node.has_permission(user, ADMIN) for node in resource_list])
+
+    def bulk_destroy_skip_uneditable(self, resource_object_list, user, object_type):
+        """
+        If skip_uneditable=True in query_params, skip the resources for which the user does not have
+        admin permissions and delete the remaining resources
+        """
+        allowed = []
+        skipped = []
+
+        if not is_truthy(self.request.query_params.get('skip_uneditable', False)):
+            return None
+
+        for resource in resource_object_list:
+            if resource.has_permission(user, ADMIN):
+                allowed.append(resource)
+            else:
+                skipped.append({'id': resource._id, 'type': object_type})
+
+        return {'skipped': skipped, 'allowed': allowed}
 
     # Overrides BulkDestroyJSONAPIView
     def perform_destroy(self, instance):
@@ -406,7 +438,7 @@ class NodeDetail(JSONAPIBaseView, generics.RetrieveUpdateDestroyAPIView, NodeMix
 
     ##Query Params
 
-    *None*.
+    + `view_only=<Str>` -- Allow users with limited access keys to access this node. Note that some keys are anonymous, so using the view_only key will cause user-related information to no longer serialize. This includes blank ids for users and contributors and missing serializer fields and relationships.
 
     #This Request/Response
 
@@ -448,6 +480,9 @@ class NodeContributorsList(JSONAPIBaseView, bulk_views.BulkUpdateJSONAPIView, bu
     have read access to the node. Contributors are divided between 'bibliographic' and 'non-bibliographic'
     contributors. From a permissions standpoint, both are the same, but bibliographic contributors
     are included in citations, while non-bibliographic contributors are not included in citations.
+
+    Note that if an anonymous view_only key is being used, the user relationship will not be exposed and the id for
+    the contributor will be an empty string.
 
     ##Node Contributor Attributes
 
@@ -597,6 +632,9 @@ class NodeContributorDetail(JSONAPIBaseView, generics.RetrieveUpdateDestroyAPIVi
     have read access to the node. Contributors are divided between 'bibliographic' and 'non-bibliographic'
     contributors. From a permissions standpoint, both are the same, but bibliographic contributors
     are included in citations, while non-bibliographic contributors are not included in citations.
+
+    Note that if an anonymous view_only key is being used, the user relationship will not be exposed and the id for
+    the contributor will be an empty string.
 
     Contributors can be viewed, removed, and have their permissions and bibliographic status changed via this
     endpoint.
@@ -1131,22 +1169,31 @@ class NodeFilesList(JSONAPIBaseView, generics.ListAPIView, WaterButlerMixin, Lis
     found [here](/v2/#storage-providers).
 
         name          type               description
-        ---------------------------------------------------------------------------------
-        name          string             name of the file or folder; use for display
-        kind          string             "file" or "folder"
-        path          url path           unique path for this entity, used in "move" actions
-        size          integer            size of file in bytes, null for folders
-        provider      string             storage provider for this file. "osfstorage" if stored on the OSF.  Other
-                                         examples include "s3" for Amazon S3, "googledrive" for Google Drive, "box"
-                                         for Box.com.
-        last_touched  iso8601 timestamp  last time the metadata for the file was retrieved. only applies to non-OSF
-                                         storage providers.
-        date_modified iso8601 timestamp  timestamp of when this file was last updated
-        extra         object             may contain additional data beyond what's described here, depending on
-                                         the provider
-          hashes      object
-            md5       string             md5 hash of file, null for folders
-            sha256    string             SHA-256 hash of file, null for folders
+        ---------------------------------------------------------------------------------------------------
+        name              string             name of the file or folder; used for display
+        kind              string             "file" or "folder"
+        path              string             same as for corresponding WaterButler entity
+        materialized_path string             the unix-style path to the file relative to the provider root
+        size              integer            size of file in bytes, null for folders
+        provider          string             storage provider for this file. "osfstorage" if stored on the
+                                             OSF.  other examples include "s3" for Amazon S3, "googledrive"
+                                             for Google Drive, "box" for Box.com.
+        last_touched      iso8601 timestamp  last time the metadata for the file was retrieved. only
+                                             applies to non-OSF storage providers.
+        date_modified     iso8601 timestamp  timestamp of when this file was last updated*
+        date_created      iso8601 timestamp  timestamp of when this file was created*
+        extra             object             may contain additional data beyond what's described here,
+                                             depending on the provider
+          hashes          object
+            md5           string             md5 hash of file, null for folders
+            sha256        string             SHA-256 hash of file, null for folders
+
+    * A note on timestamps: for files stored in osfstorage, `date_created` refers to the time the file was
+    first uploaded to osfstorage, and `date_modified` is the time the file was last updated while in osfstorage.
+    Other providers may or may not provide this information, but if they do it will correspond to the provider's
+    semantics for created/modified times.  These timestamps may also be stale; metadata retrieved via the File Detail
+    endpoint is cached.  The `last_touched` field describes the last time the metadata was retrieved from the external
+    provider.  To force a metadata update, access the parent folder via its Node Files List endpoint.
 
     ##Links
 
@@ -1601,6 +1648,8 @@ class NodeLogList(JSONAPIBaseView, generics.ListAPIView, NodeMixin, ODMFilterMix
 
     Paginated list of Logs ordered by their `date`. This includes the Logs of the specified Node as well as the logs of that Node's children that the current user has access to.
 
+    Note that if an anonymous view_only key is being used, the user relationship will not be exposed.
+
     On the front end, logs show record and show actions done on the OSF. The complete list of loggable actions (in the format {identifier}: {description}) is as follows:
 
     * 'project_created': A Node is created
@@ -1733,6 +1782,8 @@ class NodeCommentsList(JSONAPIBaseView, generics.ListCreateAPIView, ODMFilterMix
 
     Paginated list of comments ordered by their `date_created.` Each resource contains the full representation of the
     comment, meaning additional requests to an individual comment's detail view are not necessary.
+
+    Note that if an anonymous view_only key is being used, the user relationship will not be exposed.
 
     ###Permissions
 

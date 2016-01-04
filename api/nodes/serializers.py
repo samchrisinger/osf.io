@@ -33,6 +33,7 @@ class NodeSerializer(JSONAPISerializer):
     # handle blank choices properly. Currently DRF ChoiceFields ignore blank options, which is incorrect in this
     # instance
     filterable_fields = frozenset([
+        'id',
         'title',
         'description',
         'public',
@@ -40,7 +41,9 @@ class NodeSerializer(JSONAPISerializer):
         'category',
         'date_created',
         'date_modified',
-        'registration'
+        'registration',
+        'root',
+        'parent'
     ])
 
     id = IDField(source='_id', read_only=True)
@@ -106,7 +109,8 @@ class NodeSerializer(JSONAPISerializer):
 
     parent = RelationshipField(
         related_view='nodes:node-detail',
-        related_view_kwargs={'node_id': '<parent_id>'}
+        related_view_kwargs={'node_id': '<parent_node._id>'},
+        filter_key='parent_node'
     )
 
     registrations = DevOnly(HideIfRegistration(RelationshipField(
@@ -114,6 +118,11 @@ class NodeSerializer(JSONAPISerializer):
         related_view_kwargs={'node_id': '<pk>'},
         related_meta={'count': 'get_registration_count'}
     )))
+
+    root = RelationshipField(
+        related_view='nodes:node-detail',
+        related_view_kwargs={'node_id': '<root._id>'}
+    )
 
     logs = RelationshipField(
         related_view='nodes:node-logs',
@@ -206,6 +215,7 @@ class NodeDetailSerializer(NodeSerializer):
 class NodeContributorsSerializer(JSONAPISerializer):
     """ Separate from UserSerializer due to necessity to override almost every field as read only
     """
+    non_anonymized_fields = ['bibliographic', 'permission']
     filterable_fields = frozenset([
         'id',
         'bibliographic',
@@ -233,9 +243,6 @@ class NodeContributorsSerializer(JSONAPISerializer):
 
     class Meta:
         type_ = 'contributors'
-
-    def absolute_url(self, obj):
-        return obj.absolute_url
 
     def get_absolute_url(self, obj):
         node_id = self.context['request'].parser_context['kwargs']['node_id']
