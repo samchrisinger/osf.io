@@ -30,7 +30,7 @@ class JSONAPIBaseView(generics.GenericAPIView):
         :return function object -> dict:
         """
         if getattr(field, 'field', None):
-                field = field.field
+            field = field.field
         def partial(item):
             # resolve must be implemented on the field
             view, view_args, view_kwargs = field.resolve(item)

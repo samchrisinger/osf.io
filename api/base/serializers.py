@@ -827,10 +827,12 @@ class JSONAPISerializer(ser.Serializer):
                         except SkipField:
                             continue
                     else:
-                        result = self.context['embed'][field.field_name](obj)
-
-                    if result:
-                        data['embeds'][field.field_name] = result
+                        val = getattr(obj, field.field_name, None)
+                        if val:
+                            result = self.context['embed'][field.field_name](obj)
+                        else:
+                            result = None
+                    data['embeds'][field.field_name] = result
                 else:
                     try:
                         if not (is_anonymous and
